@@ -16,7 +16,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{height:100%}
 body{
-  margin:0;min-height:100dvh;
+  margin:0;min-height:100vh;min-height:100dvh;
   font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",system-ui,sans-serif;
   background:
     radial-gradient(120% 65% at 50% -8%,#2a1d63 0%,transparent 60%),
@@ -27,12 +27,13 @@ body{
   -webkit-text-size-adjust:100%;
 }
 button,a,input{font-family:inherit;touch-action:manipulation}
+button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .wrap{
   max-width:480px;margin:0 auto;
-  padding:calc(16px + env(safe-area-inset-top)) var(--pad) calc(var(--cta) + env(safe-area-inset-bottom));
+  padding:calc(16px + env(safe-area-inset-top,0px)) var(--pad) calc(var(--cta) + env(safe-area-inset-bottom,0px));
   display:flex;flex-direction:column;gap:12px;
 }
-.wrap.center{min-height:100dvh;justify-content:center;text-align:center;gap:10px}
+.wrap.center{min-height:100vh;min-height:100dvh;justify-content:center;text-align:center;gap:10px}
 h1{font-size:clamp(30px,9vw,38px);margin:6px 0 4px;line-height:1.15;letter-spacing:-.5px}
 h2{font-size:clamp(19px,5.4vw,23px);margin:8px 0;font-weight:800}
 .hero p{color:var(--mut);line-height:1.65;margin:0;font-size:14.5px}
@@ -63,11 +64,11 @@ h2{font-size:clamp(19px,5.4vw,23px);margin:8px 0;font-weight:800}
 .nm::placeholder{color:#6f6790}
 .nm:focus{outline:none;border-color:rgba(107,76,255,.9);background:rgba(107,76,255,.12)}
 .cta{
-  position:fixed;left:0;right:0;bottom:0;z-index:20;
-  padding:10px var(--pad) calc(10px + env(safe-area-inset-bottom));
+  position:fixed;left:0;right:0;bottom:0;z-index:20;pointer-events:none;
+  padding:10px var(--pad) calc(10px + env(safe-area-inset-bottom,0px));
   background:linear-gradient(to top,rgba(8,7,15,.97) 38%,rgba(8,7,15,.88) 70%,rgba(8,7,15,0));
 }
-.cta-in{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.cta-in{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:8px;pointer-events:auto}
 .big{
   display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:58px;padding:14px 16px;
   border:0;border-radius:16px;font-size:18px;font-weight:800;line-height:1.25;color:#1b1206;text-decoration:none;
@@ -109,6 +110,11 @@ h2{font-size:clamp(19px,5.4vw,23px);margin:8px 0;font-weight:800}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);animation:blink 1s infinite;flex:none}
 @keyframes blink{50%{opacity:.15}}
 .pv{width:100%;border-radius:14px;background:#000;max-height:210px;object-fit:cover;display:block;margin-bottom:12px}
+/* iOS Safari: شريط التنقل السفلي كيغطي آخر 44px من الشاشة */
+@supports (-webkit-touch-callout:none){
+  .cta{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+  .wrap{padding-bottom:calc(var(--cta) + 20px + env(safe-area-inset-bottom,0px))}
+}
 button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 @media (max-height:680px){
   .hero p{display:none}
@@ -156,6 +162,7 @@ const rnd = n => Math.floor(Math.random() * n);
 const pick = a => a[rnd(a.length)];
 const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const name = i => ((S.names[i] || "").trim() || "لاعب " + (i + 1));
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
 const views = {};
 
@@ -315,9 +322,10 @@ views.reveal = () => `
 function show(v) {
   clearInterval(timerId); timerId = null;
   if (v !== "discuss" && rec) rec.mr.stop();
+  const sameView = v === view;
   view = v;
   app.innerHTML = views[v]();
-  window.scrollTo(0, 0);
+  if (!sameView) window.scrollTo(0, 0);
   if (v === "discuss") {
     if (S.timer) startTimer();
     renderRec();
