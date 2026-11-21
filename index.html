@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>من المحتال؟</title>
+<style>
+:root{
+  --card:rgba(255,255,255,.06); --line:rgba(255,255,255,.11);
+  --txt:#f3effd; --mut:#a79dc8; --acc:#ffb545; --acc2:#7c5cff; --bad:#ff5c7a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{
+  font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",system-ui,sans-serif;
+  background:
+    radial-gradient(1100px 560px at 50% -12%,#2b2063 0%,transparent 62%),
+    radial-gradient(700px 420px at 105% 105%,#3d1a46 0%,transparent 58%),
+    #0b0a14;
+  color:var(--txt); min-height:100dvh;
+}
+.wrap{max-width:520px;margin:0 auto;padding:20px 18px calc(28px + env(safe-area-inset-bottom))}
+.wrap.center{display:flex;flex-direction:column;justify-content:center;min-height:100dvh;text-align:center;gap:6px}
+h1{font-size:40px;margin:10px 0 8px;line-height:1.15;letter-spacing:-.5px}
+h2{font-size:24px;margin:12px 0}
+.hero p{color:var(--mut);line-height:1.7;margin:0 0 18px;font-size:15px}
+.badge{display:inline-block;font-size:12px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut);background:var(--card)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 16px;margin:14px 0;backdrop-filter:blur(8px)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.lbl{font-weight:700;font-size:16px}
+.hint{color:var(--mut);font-size:13px;margin-top:3px;line-height:1.5}
+.stepper{display:flex;align-items:center;gap:6px;flex:none}
+.stepper button{width:42px;height:42px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.07);color:var(--txt);font-size:22px;line-height:1;cursor:pointer}
+.stepper button:disabled{opacity:.3}
+.stepper span{min-width:38px;text-align:center;font-size:20px;font-weight:800}
+.switch{width:56px;height:32px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.08);position:relative;cursor:pointer;flex:none;padding:0}
+.switch span{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:#8e84b3;transition:.18s}
+.switch.on{background:linear-gradient(135deg,var(--acc),#ff8a3d);border-color:transparent}
+.switch.on span{right:27px;background:#1a1206}
+.seg{display:flex;gap:6px;flex:none}
+.seg button{border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--mut);border-radius:12px;padding:9px 11px;font-size:13px;font-family:inherit;cursor:pointer}
+.seg button.on{background:linear-gradient(135deg,var(--acc),#ff8a3d);color:#1a1206;border-color:transparent;font-weight:800}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 4px}
+.chip{border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--txt);border-radius:99px;padding:9px 14px;font-size:14px;font-family:inherit;cursor:pointer}
+.chip.on{background:rgba(124,92,255,.28);border-color:rgba(124,92,255,.7)}
+.big{display:block;width:100%;margin-top:20px;padding:19px;border:0;border-radius:18px;font-size:19px;font-weight:800;font-family:inherit;cursor:pointer;
+  background:linear-gradient(135deg,var(--acc),#ff8a3d);color:#1a1206;box-shadow:0 10px 30px rgba(255,150,60,.25)}
+.big:active{transform:scale(.99)}
+.ghost{background:none;border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:9px 14px;font-family:inherit;font-size:14px;cursor:pointer}
+.pass-ico{font-size:52px}
+.pname{font-size:34px;font-weight:900;margin:6px 0}
+.pname.small{font-size:16px;color:var(--mut);font-weight:600}
+.cardbox{background:linear-gradient(160deg,rgba(124,92,255,.22),rgba(255,255,255,.05));border:1px solid var(--line);border-radius:26px;padding:34px 20px;margin:18px 0;min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.cardbox.imp{background:linear-gradient(160deg,rgba(255,92,122,.22),rgba(255,255,255,.05));border-color:rgba(255,92,122,.45)}
+.tag{font-size:13px;color:var(--mut);letter-spacing:.5px}
+.word{font-size:44px;font-weight:900;line-height:1.2}
+.clock{font-size:58px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:1px;margin:4px 0}
+.clock.over{font-size:30px;color:var(--bad)}
+.tag2{font-size:12px;color:var(--mut);letter-spacing:2px}
+.tips{margin:8px 0;padding-inline-start:18px;color:var(--mut);line-height:1.9;font-size:14px}
+.imp-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px}
+.imp-list span{background:rgba(255,92,122,.18);border:1px solid rgba(255,92,122,.5);border-radius:12px;padding:8px 14px;font-weight:700}
+.foot{color:var(--mut);font-size:12px;text-align:center;margin-top:22px;line-height:1.7}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 0 14px}
+.nm{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;color:var(--txt);padding:11px 12px;font-family:inherit;font-size:15px;min-width:0}
+.nm:focus{outline:none;border-color:rgba(124,92,255,.8)}
+.recbar{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--bad);font-weight:700;padding:10px 0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.15}}
+.pv{width:100%;border-radius:16px;background:#000;max-height:230px;object-fit:cover;display:block}
+a.big{text-align:center;text-decoration:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const CATS = {
+  "حيوانات":["أسد","فيل","قطة","كلب","جمل","حصان","تمساح","زرافة","قرد","دلفين","نعامة","ثعبان","نحلة","عصفور","ذيب","خروف","بقرة","عقرب","سمكة","بومة","سلحفاة","خنزير","أرنب","فهد"],
+  "طعام":["كسكس","طاجين","حريرة","بيتزا","شاورما","برغر","ملوخية","مسمن","بغرير","أتاي","قهوة","حلوى","دلاح","رمان","زيتون","خبز","دجاج محمر","عصير","مثلجات","فريت","سردين","كفتة","بسطيلة","شكلاطة"],
+  "بلدان":["المغرب","مصر","السعودية","فرنسا","إسبانيا","تركيا","اليابان","البرازيل","الصين","الهند","أمريكا","الجزائر","تونس","كندا","إيطاليا","ألمانيا","روسيا","المكسيك","السنغال","قطر"],
+  "رياضة":["كرة القدم","كرة السلة","تنس","سباحة","جري","ملاكمة","كمال الأجسام","ركوب الدراجة","جودو","كرة اليد","غولف","تزلج","كريكيت","رغبي","شطرنج","مصارعة","جمباز","كرة الطائرة","رماية","فورمولا 1"],
+  "أفلام":["تايتانيك","الأسد الملك","هاري بوتر","أفاتار","سبايدرمان","باتمان","جوكر","إنسبشن","سيد الخواتم","فاست أند فيورس","شرلوك","صراع العروش","لالاند","بريزون بريك","مونانا","فريزون","شريك","ماما ميا","وادي الذئاب","الأصدقاء"],
+  "مهن":["طبيب","أستاذ","طيار","بحّار","طباخ","حلاق","نجار","مهندس","شرطي","ممرض","سائق طاكسي","فلاح","صحافي","محامي","بائع","صيدلي","ميكانيكي","رسام","مغني","حارس"],
+  "أماكن":["مطار","مستشفى","سوق","مسجد","شاطئ","مدرسة","بنك","محطة القطار","صيدلية","مطعم","حديقة","متحف","سجن","فندق","ملعب","مقهى","سينما","مكتبة","مراكش","حلاق"],
+  "أشياء":["تيليفون","مفتاح","مرايا","كرسي","طاولة","ساعة","قلم","محفظة","نظارة","حذاء","قبعة","مظلة","تلفاز","ثلاجة","مكواة","شنطة","خاتم","سكين","وسادة","شمعة","مكنسة","بوصلة"],
+  "مشاهير":["ميسي","رونالدو","نيمار","محمد صلاح","حكيمي","زياش","مايكل جاكسون","شاكيرا","بيونسيه","تايلور سويفت","دريك","إيلون ماسك","بيل غيتس","أوباما","رونالدينيو","زيدان","مبابي","سيلينا غوميز","أديل","براد بيت"],
+  "ماركات":["نايكي","أديداس","آبل","سامسونج","كوكاكولا","بيبسي","ماكدونالدز","ستاربكس","نتفليكس","يوتيوب","فيسبوك","إنستغرام","تويوتا","مرسيدس","شانيل","غوتشي","إيكيا","أمازون","تيك توك","ريد بُل"],
+  "أنمي":["ناروتو","ون بيس","دراغون بول","ديث نوت","أتاك أون تايتن","ديمون سلاير","جوجوتسو كايسن","بليتش","هنتر إكس هنتر","ماي هيرو أكاديميا","سباير إكس فاميلي","توكيو غول","بوكيمون","سايلور مون","فولميتال ألكيميست","بلاك كلوفر","هايكيو","سورد آرت أونلاين","تشينسو مان","إيفانجيليون"],
+  "ألعاب فيديو":["فورتنايت","ماينكرافت","جي تي إيه","كول أوف ديوتي","فيفا","ببجي","روبلوكس","ماريو","زيلدا","أساسينز كريد","غود أوف وار","ريد ديد","ذا ويتشر","كاندي كراش","سابواي سيرفرز","كلاش أوف كلانس","مورتال كومبات","تيكن","فول قايز","أمونغ أس"]
+};
+const ALL = Object.keys(CATS);
+const KEY = "mn_almo7tal_v1";
+
+let S = { players: 5, impostors: 1, chaos: false, cats: ALL.slice(), timer: 120, names: [] };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+if (!S.cats || !S.cats.length) S.cats = ALL.slice();
+if (!Array.isArray(S.names)) S.names = [];
+
+let G = null;          // round state
+let view = "setup";
+let timerId = null;
+let rec = null;        // active MediaRecorder session
+let recUrl = null;     // last recording blob url
+
+const app = document.getElementById("app");
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+const name = i => ((S.names[i] || "").trim() || "لاعب " + (i + 1));
+
+const views = {};
+
+views.setup = () => `
+<div class="wrap">
+  <header class="hero">
+    <div class="badge">لعبة جماعية · ٣ إلى ٢٠ لاعب</div>
+    <h1>من المحتال؟</h1>
+    <p>الجميع عندو نفس الكلمة… غير واحد. كل واحد كيوصف الكلمة بكلمة وحدة، وكتصوّتو على المحتال قبل ما يخدعكم.</p>
+  </header>
+
+  <section class="card">
+    <div class="row">
+      <div><div class="lbl">عدد اللاعبين</div><div class="hint">من ٣ إلى ٢٠</div></div>
+      <div class="stepper">
+        <button data-act="p-" ${S.players <= 3 ? "disabled" : ""}>−</button>
+        <span>${S.players}</span>
+        <button data-act="p+" ${S.players >= 20 ? "disabled" : ""}>+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><div class="lbl">عدد المحتالين</div><div class="hint">${S.chaos ? "وضع الفوضى مفعّل" : "ثابت فكل جولة"}</div></div>
+      <div class="stepper">
+        <button data-act="i-" ${S.impostors <= 1 || S.chaos ? "disabled" : ""}>−</button>
+        <span>${S.chaos ? "؟" : S.impostors}</span>
+        <button data-act="i+" ${S.chaos || S.impostors >= 3 || S.impostors >= S.players - 1 ? "disabled" : ""}>+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><div class="lbl">وضع الفوضى</div><div class="hint">عدد المحتالين عشوائي فكل جولة</div></div>
+      <button class="switch ${S.chaos ? "on" : ""}" data-act="chaos"><span></span></button>
+    </div>
+
+    <div class="row">
+      <div><div class="lbl">مؤقت النقاش</div></div>
+      <div class="seg">
+        ${[0, 60, 120, 180].map(t => `<button data-act="t" data-val="${t}" class="${S.timer === t ? "on" : ""}">${t ? t / 60 + " د" : "بلا"}</button>`).join("")}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="lbl" style="padding-top:14px">الفئات</div>
+    <div class="chips">
+      ${ALL.map(c => `<button class="chip ${S.cats.includes(c) ? "on" : ""}" data-act="cat" data-val="${c}">${c}</button>`).join("")}
+    </div>
+    <div class="hint" style="padding-bottom:14px">${S.cats.length} فئة مختارة</div>
+  </section>
+
+  <section class="card">
+    <div class="lbl" style="padding-top:14px">أسماء اللاعبين <span class="hint" style="font-weight:400">(اختياري)</span></div>
+    <div class="names">
+      ${Array.from({ length: S.players }, (_, i) =>
+        `<input class="nm" data-i="${i}" maxlength="14" placeholder="لاعب ${i + 1}" value="${(S.names[i] || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}">`
+      ).join("")}
+    </div>
+  </section>
+
+  <button class="big" data-act="start">بدا اللعبة</button>
+  <div class="foot">خدمة بلا إنترنت · مرّر تيليفون واحد بين اللاعبين</div>
+</div>`;
+
+views.pass = () => `
+<div class="wrap center">
+  <div class="pass-ico">📱</div>
+  <h2>مرّر التيليفون إلى</h2>
+  <div class="pname">${name(G.i)}</div>
+  <p class="hint">${G.i === 0 ? "خلي الباقي يشوفو معاك" : "خلي عينيك بعيدين على الشاشة"}</p>
+  <button class="big" data-act="card">أنا ${name(G.i)} — اكشف البطاقة</button>
+</div>`;
+
+views.card = () => {
+  const imp = G.imp.includes(G.i);
+  return `
+<div class="wrap center">
+  <div class="pname small">${name(G.i)}</div>
+  <div class="cardbox ${imp ? "imp" : ""}">
+    ${imp
+      ? `<div class="tag">أنت المحتال</div>
+         <div class="word">🤫</div>
+         <p class="hint">الفئة: ${G.cat}<br>ما تعرفش الكلمة. خمّم، وقلّد وصف الآخرين.</p>`
+      : `<div class="tag">الكلمة ديالك</div>
+         <div class="word">${G.word}</div>
+         <p class="hint">الفئة: ${G.cat}</p>`}
+  </div>
+  <button class="big" data-act="hide">خفيت البطاقة ✅</button>
+</div>`;
+};
+
+views.discuss = () => `
+<div class="wrap">
+  <div style="text-align:center;padding:8px 0 4px">
+    <div class="tag2">دور النقاش</div>
+    <div id="clock" class="clock">${S.timer ? fmt(S.timer) : "🎙️"}</div>
+    <p class="hint">${S.timer ? "المؤقت كيدور" : "بلا مؤقت — صوّتو فاش تشوفو مناسب"}</p>
+  </div>
+
+  <section class="card">
+    <div class="row">
+      <div><div class="lbl">يبدا النقاش</div><div class="hint">كل واحد كيقول كلمة وحدة على الكلمة</div></div>
+      <div class="pname small" style="font-size:20px;color:var(--txt);font-weight:800">${name(G.start)}</div>
+    </div>
+    <div class="row">
+      <div class="lbl">لاعب آخر عشوائي</div>
+      <button class="ghost" data-act="randstart">🎲 بدّل</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="lbl" style="padding-top:14px">أفكار للنقاش</div>
+    <ul class="tips">
+      <li>وصّف بكلمة وحدة فقط، بلا ما تقول الكلمة نفسها.</li>
+      <li>عاودو الدور مرتين — المحتال غالباً كيغلط فالدور الثاني.</li>
+      <li>سولو أسئلة: واش كيتوكل؟ واش كيتلبس؟ واش كتمشي ليه؟</li>
+      <li>المحتال خاصو يقلّد الوصف ديال الآخرين بلا ما يبان.</li>
+    </ul>
+  </section>
+
+  <div id="rec" style="margin-top:14px"></div>
+
+  <button class="big" data-act="reveal">كشف المحتال 👀</button>
+</div>`;
+
+views.reveal = () => `
+<div class="wrap center">
+  <div class="tag2">الكلمة كانت</div>
+  <div class="word" style="font-size:40px;margin:8px 0">${G.word}</div>
+  <div class="hint">الفئة: ${G.cat}</div>
+
+  <div class="tag2" style="margin-top:26px">${G.imp.length > 1 ? "المحتالين" : "المحتال"}</div>
+  <div class="imp-list">${G.imp.map(i => `<span>${name(i)}</span>`).join("")}</div>
+
+  ${recUrl ? `<a class="big" href="${recUrl}" download="reaction.webm">🎥 حمّل فيديو الجولة</a>` : ""}
+  <button class="big" data-act="start">جولة جديدة 🔁</button>
+  <button class="ghost" style="margin-top:14px" data-act="setup">تغيير الإعدادات</button>
+</div>`;
+
+function show(v) {
+  clearInterval(timerId); timerId = null;
+  if (v !== "discuss" && rec) rec.mr.stop();
+  view = v;
+  app.innerHTML = views[v]();
+  window.scrollTo(0, 0);
+  if (v === "discuss") {
+    if (S.timer) startTimer();
+    renderRec();
+  }
+}
+
+let recGen = 0;
+
+async function startRec() {
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    alert("هاد المتصفح ما كيدعمش التسجيل.");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+    const type = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]
+      .find(t => MediaRecorder.isTypeSupported(t)) || "";
+    const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    const chunks = [], gen = ++recGen;
+    mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      rec = null;
+      if (gen !== recGen) return;
+      recUrl = URL.createObjectURL(new Blob(chunks, { type: type || "video/webm" }));
+      if (view === "discuss") renderRec();
+      else if (view === "reveal") app.innerHTML = views.reveal();
+    };
+    mr.start();
+    rec = { mr, stream };
+    renderRec();
+  } catch (e) {
+    alert("ما قدرناش نوصلو للكاميرا: " + (e.message || e));
+  }
+}
+
+function renderRec() {
+  const el = document.getElementById("rec");
+  if (!el) return;
+  if (rec) {
+    el.innerHTML = `<div class="card"><div class="recbar"><span class="dot"></span> كنسجّلو…<button class="ghost" data-act="recstop">وقّف</button></div><video id="pv" class="pv" autoplay muted playsinline></video></div>`;
+    document.getElementById("pv").srcObject = rec.stream;
+  } else if (recUrl) {
+    el.innerHTML = `<div class="card" style="padding:16px"><div class="lbl">🎥 الفيديو جاهز</div><div class="hint" style="margin:6px 0 10px">حمّلو وشاركو مع الصحاب.</div><a class="ghost" style="display:block;text-align:center;text-decoration:none" href="${recUrl}" download="reaction.webm">حمّل الفيديو</a></div>`;
+  } else {
+    el.innerHTML = `<button class="ghost" style="width:100%" data-act="recstart">🎥 سجّل ردة الفعل</button>`;
+  }
+}
+
+function startTimer() {
+  G.left = S.timer;
+  const el = document.getElementById("clock");
+  if (!el) return;
+  timerId = setInterval(() => {
+    G.left--;
+    if (G.left <= 0) {
+      clearInterval(timerId); timerId = null;
+      el.textContent = "خلص الوقت!";
+      el.classList.add("over");
+      return;
+    }
+    el.textContent = fmt(G.left);
+  }, 1000);
+}
+
+function newRound() {
+  recGen++; if (rec) rec.mr.stop(); recUrl = null;
+  const cats = S.cats.length ? S.cats : ALL;
+  const cat = pick(cats);
+  const n = S.chaos
+    ? 1 + rnd(Math.min(3, S.players - 1))
+    : Math.min(S.impostors, S.players - 1);
+  const idx = Array.from({ length: S.players }, (_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) { const j = rnd(i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  G = { cat, word: pick(CATS[cat]), imp: idx.slice(0, n), i: 0, start: rnd(S.players), left: 0 };
+  show("pass");
+}
+
+app.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const a = el.dataset.act, v = el.dataset.val;
+
+  if (a === "p-") S.players = Math.max(3, S.players - 1);
+  else if (a === "p+") S.players = Math.min(20, S.players + 1);
+  else if (a === "i-") S.impostors = Math.max(1, S.impostors - 1);
+  else if (a === "i+") S.impostors = Math.min(3, S.players - 1, S.impostors + 1);
+  else if (a === "chaos") S.chaos = !S.chaos;
+  else if (a === "t") S.timer = +v;
+  else if (a === "cat") {
+    S.cats = S.cats.includes(v) ? S.cats.filter(c => c !== v) : [...S.cats, v];
+  }
+  else if (a === "start") { newRound(); return; }
+  else if (a === "card") { show("card"); return; }
+  else if (a === "hide") {
+    if (G.i + 1 < S.players) { G.i++; show("pass"); }
+    else show("discuss");
+    return;
+  }
+  else if (a === "randstart") {
+    G.start = rnd(S.players);
+    app.querySelector(".row .pname").textContent = name(G.start);
+    return;
+  }
+  else if (a === "recstart") { startRec(); return; }
+  else if (a === "recstop") { if (rec) rec.mr.stop(); return; }
+  else if (a === "reveal") { show("reveal"); return; }
+  else if (a === "setup") { show("setup"); return; }
+
+  if (S.impostors > S.players - 1) S.impostors = Math.max(1, S.players - 1);
+  localStorage.setItem(KEY, JSON.stringify(S));
+  show("setup");
+});
+
+app.addEventListener("input", e => {
+  const el = e.target.closest(".nm");
+  if (!el) return;
+  S.names[+el.dataset.i] = el.value;
+  localStorage.setItem(KEY, JSON.stringify(S));
+});
+
+show("setup");
+</script>
+</body>
+</html>
