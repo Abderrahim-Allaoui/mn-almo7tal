@@ -167,7 +167,7 @@ let mqttClient = null, clientId = "", netStatus = "idle";
 const BROKERS = [
   "wss://broker.emqx.io:8084/mqtt",
   "wss://broker.hivemq.com:8884/mqtt",
-  "wss://broker.emqx.io:443/mqtt"
+  "wss://test.mosquitto.org:8081/mqtt"
 ];
 let netRole = null;    // "host" | "guest" | null
 let roomCode = "", players = [], readyCount = 0, readyIds = new Set();
