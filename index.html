@@ -76,6 +76,11 @@ h2{font-size:clamp(19px,5.4vw,23px);margin:8px 0;font-weight:800}
   box-shadow:0 14px 30px -12px rgba(255,150,60,.75);cursor:pointer;transition:transform .12s ease;
 }
 .big:active{transform:scale(.98)}
+.big:disabled{opacity:.4;box-shadow:none;cursor:default}
+.room-code{font-size:38px;font-weight:900;letter-spacing:8px;text-align:center;margin:10px 0 4px;color:var(--gold);font-variant-numeric:tabular-nums}
+.plist{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 4px}
+.plist span{background:rgba(107,76,255,.18);border:1px solid rgba(107,76,255,.45);border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}
+.plist span.me{background:rgba(255,194,71,.16);border-color:rgba(255,194,71,.5)}
 .ghost{
   display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;padding:10px 14px;
   background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink);border-radius:14px;font-size:15px;cursor:pointer;text-decoration:none
@@ -146,10 +151,11 @@ const CATS = {
 const ALL = Object.keys(CATS);
 const KEY = "mn_almo7tal_v1";
 
-let S = { players: 5, impostors: 1, chaos: false, cats: ALL.slice(), timer: 120, names: [] };
+let S = { players: 5, impostors: 1, chaos: false, cats: ALL.slice(), timer: 120, names: [], mode: "local", hostName: "" };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
 if (!S.cats || !S.cats.length) S.cats = ALL.slice();
 if (!Array.isArray(S.names)) S.names = [];
+if (S.mode === "online") S.mode = "local";
 
 let G = null;          // round state
 let view = "setup";
@@ -157,16 +163,158 @@ let timerId = null;
 let rec = null;        // active MediaRecorder session
 let recUrl = null;     // last recording blob url
 
+let mqttClient = null, clientId = "";
+let netRole = null;    // "host" | "guest" | null
+let roomCode = "", players = [], readyCount = 0, readyIds = new Set();
+let joinCode = (new URLSearchParams(location.search).get("room") || "").toUpperCase();
+const isGuest = () => netRole === "guest";
+const topic = () => "mn-almo7tal/v1/" + roomCode;
+const send = d => { if (mqttClient && roomCode) { try { mqttClient.publish(topic(), JSON.stringify({ ...d, from: clientId })); } catch (e) {} } };
+const broadcast = send;
+
 const app = document.getElementById("app");
 const rnd = n => Math.floor(Math.random() * n);
 const pick = a => a[rnd(a.length)];
 const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const name = i => ((S.names[i] || "").trim() || "لاعب " + (i + 1));
+
+function genCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
+
+function loadMqtt(cb) {
+  if (window.mqtt) return cb();
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.16.1/mqtt.min.js";
+  s.onload = cb;
+  s.onerror = () => alert("ما قدرناش نحمّلو مكتبة الاتصال. تأكد من الإنترنت.");
+  document.head.appendChild(s);
+}
+
+function connectMqtt(code, role, after) {
+  loadMqtt(() => {
+    roomCode = code; netRole = role;
+    clientId = "m7l" + Math.random().toString(36).slice(2, 12);
+    const m = window.mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+      clientId, clean: true, keepalive: 30, connectTimeout: 10000, reconnectPeriod: 2000
+    });
+    mqttClient = m;
+    m.on("connect", () => m.subscribe(topic(), { qos: 1 }, () => after()));
+    m.on("message", (t, buf) => {
+      if (t !== topic()) return;
+      let d;
+      try { d = JSON.parse(buf.toString()); } catch (e) { return; }
+      if (!d || d.from === clientId || (d.to && d.to !== clientId)) return;
+      if (netRole === "host") onHostData(d); else onGuestData(d);
+    });
+    m.on("error", e => alert("مشكل الاتصال: " + (e.message || "الأونلاين")));
+  });
+}
+
+function closeNet() {
+  if (netRole === "host") send({ t: "stop" });
+  if (netRole === "guest") send({ t: "bye" });
+  if (mqttClient) { try { mqttClient.end(true); } catch (e) {} }
+  mqttClient = null; clientId = ""; netRole = null;
+  players = []; roomCode = ""; readyCount = 0; readyIds = new Set();
+}
+
+window.addEventListener("pagehide", () => { if (netRole === "guest") send({ t: "bye" }); });
+
+function shareLink() {
+  const url = location.origin + location.pathname + "?room=" + roomCode;
+  if (navigator.share) navigator.share({ title: "من المحتال؟", url }).catch(() => {});
+  else if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => alert("تم نسخ الرابط")).catch(() => prompt("انسخ الرابط:", url));
+  else prompt("انسخ الرابط:", url);
+}
+
+function createRoom() {
+  if (netRole) return;
+  connectMqtt(genCode(), "host", () => show("setup"));
+}
+
+function joinRoom(code, name) {
+  if (netRole) return;
+  connectMqtt(code, "guest", () => { send({ t: "hello", name }); show("wait"); });
+}
+
+function onHostData(d) {
+  if (d.t === "hello") {
+    if (players.length >= 19 || players.some(p => p.id === d.from)) return;
+    players.push({ id: d.from, name: d.name || "لاعب" });
+    if (view === "setup") show("setup");
+  } else if (d.t === "ready" && view === "wait") {
+    readyIds.add(d.from); readyCount = readyIds.size;
+    if (readyCount >= players.length) beginDiscussHost(); else show("wait");
+  } else if (d.t === "bye") {
+    players = players.filter(p => p.id !== d.from);
+    readyIds.delete(d.from); readyCount = readyIds.size;
+    if (view === "setup") show("setup");
+  }
+}
+
+function onGuestData(d) {
+  if (!d) return;
+  if (d.t === "card") {
+    G = { cat: d.cat, word: d.word, imp: d.imp ? [d.idx] : [], i: d.idx, names: d.names, duration: 0, left: 0 };
+    show("card");
+  } else if (d.t === "discuss") {
+    G.duration = d.duration; G.startName = d.startName; G.left = d.duration;
+    show("discuss");
+  } else if (d.t === "reveal") {
+    G.word = d.word; G.cat = d.cat; G.imp = []; G.impNames = d.impostors;
+    show("reveal");
+  } else if (d.t === "starter") {
+    G.startName = d.startName;
+    const el = document.querySelector(".row .pname");
+    if (el) el.textContent = d.startName;
+  } else if (d.t === "newround") show("wait");
+  else if (d.t === "stop") { alert("المضيف خرج من الغرفة"); closeNet(); show("join"); }
+}
+
+function buildRound(n) {
+  const cats = S.cats.length ? S.cats : ALL;
+  const cat = pick(cats);
+  const k = S.chaos ? 1 + rnd(Math.min(3, n - 1)) : Math.min(S.impostors, n - 1);
+  const idx = Array.from({ length: n }, (_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) { const j = rnd(i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  return { cat, word: pick(CATS[cat]), imp: idx.slice(0, k) };
+}
+
+function beginDiscussHost() {
+  broadcast({ t: "discuss", startName: name(G.start), duration: S.timer });
+  show("discuss");
+}
+
+function hostNewRound() {
+  const names = [(S.hostName || "").trim() || "المضيف", ...players.map(p => p.name)];
+  const r = buildRound(names.length);
+  G = { ...r, i: 0, names, start: rnd(names.length), duration: S.timer, left: 0 };
+  readyIds = new Set(); readyCount = 0;
+  players.forEach((p, i) => {
+    const pi = i + 1, imp = r.imp.includes(pi);
+    send({ t: "card", word: imp ? null : r.word, cat: r.cat, imp, idx: pi, names, to: p.id });
+  });
+  show("card");
+}
+
+function hostReveal() {
+  broadcast({ t: "reveal", word: G.word, cat: G.cat, impostors: G.imp.map(i => G.names[i]) });
+  show("reveal");
+}
+
+function hostNextRound() {
+  broadcast({ t: "newround" });
+  recGen++; if (rec) rec.mr.stop(); recUrl = null;
+  hostNewRound();
+}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
 const views = {};
 
-views.setup = () => `
+views.setup = () => {
+  const online = S.mode === "online";
+  const pc = online ? players.length + 1 : S.players;
+  const esc = v => (v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return `
 <div class="wrap">
   <header class="hero">
     <div class="badge">لعبة جماعية · ٣ إلى ٢٠ لاعب</div>
@@ -174,6 +322,29 @@ views.setup = () => `
     <p>الجميع عندو نفس الكلمة… غير واحد. كل واحد كيوصف الكلمة بكلمة وحدة، وكتصوّتو على المحتال قبل ما يخدعكم.</p>
   </header>
 
+  <div class="seg" style="align-self:flex-start">
+    <button data-act="mode" data-val="local" class="${online ? "" : "on"}">تيليفون واحد</button>
+    <button data-act="mode" data-val="online" class="${online ? "on" : ""}">أونلاين 🌐</button>
+  </div>
+
+  ${online ? `
+  <section class="card" style="padding:14px">
+    <div class="lbl">رمز الغرفة</div>
+    <div class="room-code">${roomCode || "..."}</div>
+    <div class="hint" style="text-align:center">شارك الرابط، ولا عطيهم الرمز</div>
+    <button class="ghost" style="margin-top:12px" data-act="share">نسخ رابط الغرفة</button>
+    <div class="lbl" style="margin-top:16px">اسمك</div>
+    <input class="nm" id="hostName" maxlength="14" placeholder="المضيف" value="${esc(S.hostName)}" style="margin-top:8px">
+  </section>
+
+  <section class="card">
+    <div class="lbl">اللاعبون (${pc})</div>
+    <div class="plist">
+      <span class="me">${esc(S.hostName) || "المضيف"} (أنت)</span>
+      ${players.map(p => `<span>${esc(p.name)}</span>`).join("")}
+    </div>
+    <div class="hint" style="padding-bottom:14px">خاصك ٣ لاعبين على الأقل باش تبدأ</div>
+  </section>` : `
   <section class="card">
     <div class="row">
       <div><div class="lbl">عدد اللاعبين</div><div class="hint">من ٣ إلى ٢٠</div></div>
@@ -183,13 +354,15 @@ views.setup = () => `
         <button data-act="p+" ${S.players >= 20 ? "disabled" : ""}>+</button>
       </div>
     </div>
+  </section>`}
 
+  <section class="card">
     <div class="row">
       <div><div class="lbl">عدد المحتالين</div><div class="hint">${S.chaos ? "وضع الفوضى مفعّل" : "ثابت فكل جولة"}</div></div>
       <div class="stepper">
         <button data-act="i-" ${S.impostors <= 1 || S.chaos ? "disabled" : ""}>−</button>
         <span>${S.chaos ? "؟" : S.impostors}</span>
-        <button data-act="i+" ${S.chaos || S.impostors >= 3 || S.impostors >= S.players - 1 ? "disabled" : ""}>+</button>
+        <button data-act="i+" ${S.chaos || S.impostors >= 3 || S.impostors >= pc - 1 ? "disabled" : ""}>+</button>
       </div>
     </div>
 
@@ -214,20 +387,49 @@ views.setup = () => `
     <div class="hint" style="padding-bottom:14px">${S.cats.length} فئة مختارة</div>
   </section>
 
+  ${online ? "" : `
   <section class="card">
     <div class="lbl">أسماء اللاعبين <span class="hint" style="font-weight:400">(اختياري)</span></div>
     <div class="names">
       ${Array.from({ length: S.players }, (_, i) =>
-        `<input class="nm" data-i="${i}" maxlength="14" placeholder="لاعب ${i + 1}" value="${(S.names[i] || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}">`
+        `<input class="nm" data-i="${i}" maxlength="14" placeholder="لاعب ${i + 1}" value="${esc(S.names[i])}">`
       ).join("")}
     </div>
-  </section>
+  </section>`}
 
-  <div class="foot">بلا إنترنت · تيليفون واحد كيدور بين اللاعبين</div>
+  <div class="foot">${online ? "كل لاعب كيدخل من تيليفونو · محتاج إنترنت" : "بلا إنترنت · تيليفون واحد كيدور بين اللاعبين"}</div>
 </div>
 
 <div class="cta"><div class="cta-in">
-  <button class="big" data-act="start">بدا اللعبة</button>
+  <button class="big" data-act="start" ${online && players.length < 2 ? "disabled" : ""}>بدا اللعبة</button>
+</div></div>`;
+};
+
+views.join = () => `
+<div class="wrap center">
+  <div class="pass-ico">🌐</div>
+  <h2>انضم للعبة</h2>
+  <div class="card" style="padding:16px;text-align:right;width:100%">
+    <div class="lbl">رمز الغرفة</div>
+    <input class="nm" id="joinCode" maxlength="8" value="${joinCode}" style="margin:8px 0;letter-spacing:2px;text-align:center">
+    <div class="lbl">اسمك</div>
+    <input class="nm" id="joinName" maxlength="14" placeholder="اسمك" style="margin-top:8px">
+  </div>
+</div>
+
+<div class="cta"><div class="cta-in">
+  <button class="big" data-act="join">انضم 🌐</button>
+</div></div>`;
+
+views.wait = () => `
+<div class="wrap center">
+  <div class="pass-ico">⏳</div>
+  <h2>${isGuest() ? "وصلتي للغرفة" : "ستنى اللاعبين"}</h2>
+  <p class="hint">${isGuest() ? "المضيف كيوزّع البطاقات…" : `${readyCount}/${players.length} خفّيو البطاقة`}</p>
+</div>
+
+<div class="cta"><div class="cta-in">
+  <button class="big" disabled>ستنى…</button>
 </div></div>`;
 
 views.pass = () => `
@@ -259,18 +461,21 @@ views.card = () => {
 </div>
 
 <div class="cta"><div class="cta-in">
-  <button class="big" data-act="hide">خفيت البطاقة ✅</button>
+  <button class="big" data-act="${isGuest() ? "ready" : "hide"}">خفيت البطاقة ✅</button>
 </div></div>`;
 };
 
-views.discuss = () => `
+views.discuss = () => {
+  const dur = isGuest() ? G.duration : S.timer;
+  const starter = isGuest() ? G.startName : name(G.start);
+  return `
 <div class="wrap">
   <div style="text-align:center">
     <div class="tag2">دور النقاش</div>
     <div class="ring" id="ring">
       <div class="ring-in">
-        <div id="clock" class="clock">${S.timer ? fmt(S.timer) : "🎙️"}</div>
-        <div class="hint" style="font-size:11.5px">${S.timer ? "المؤقت كيدور" : "بلا مؤقت"}</div>
+        <div id="clock" class="clock">${dur ? fmt(dur) : "🎙️"}</div>
+        <div class="hint" style="font-size:11.5px">${dur ? "المؤقت كيدور" : "بلا مؤقت"}</div>
       </div>
     </div>
   </div>
@@ -278,12 +483,13 @@ views.discuss = () => `
   <section class="card">
     <div class="row">
       <div><div class="lbl">يبدا النقاش</div><div class="hint">كل واحد كيقول كلمة وحدة على الكلمة</div></div>
-      <div class="pname small" style="font-size:17px;color:var(--ink);font-weight:800">${name(G.start)}</div>
+      <div class="pname small" style="font-size:17px;color:var(--ink);font-weight:800">${starter}</div>
     </div>
+    ${isGuest() ? "" : `
     <div class="row">
       <div class="lbl">لاعب آخر عشوائي</div>
       <button class="ghost" style="width:auto;min-height:42px" data-act="randstart">🎲 بدّل</button>
-    </div>
+    </div>`}
   </section>
 
   <section class="card">
@@ -300,24 +506,30 @@ views.discuss = () => `
 </div>
 
 <div class="cta"><div class="cta-in">
-  <button class="big" data-act="reveal">كشف المحتال 👀</button>
+  <button class="big" ${isGuest() ? "disabled" : 'data-act="reveal"'}>${isGuest() ? "المضيف كيشوف النتيجة…" : "كشف المحتال 👀"}</button>
 </div></div>`;
+};
 
-views.reveal = () => `
+views.reveal = () => {
+  const imps = isGuest() ? G.impNames : G.imp.map(i => G.names ? G.names[i] : name(i));
+  return `
 <div class="wrap center">
   <div class="tag2">الكلمة كانت</div>
   <div class="word" style="font-size:clamp(28px,9vw,38px)">${G.word}</div>
   <div class="hint">الفئة: ${G.cat}</div>
 
-  <div class="tag2" style="margin-top:20px">${G.imp.length > 1 ? "المحتالين" : "المحتال"}</div>
-  <div class="imp-list">${G.imp.map(i => `<span>${name(i)}</span>`).join("")}</div>
+  <div class="tag2" style="margin-top:20px">${imps.length > 1 ? "المحتالين" : "المحتال"}</div>
+  <div class="imp-list">${imps.map(n => `<span>${n}</span>`).join("")}</div>
 </div>
 
 <div class="cta"><div class="cta-in">
-  ${recUrl ? `<a class="ghost" href="${recUrl}" download="reaction.webm">🎥 حمّل فيديو الجولة</a>` : ""}
-  <button class="big" data-act="start">جولة جديدة 🔁</button>
-  <button class="ghost" data-act="setup">تغيير الإعدادات</button>
+  ${isGuest()
+    ? `<button class="big" disabled>ستنى المضيف…</button>`
+    : `${recUrl ? `<a class="ghost" href="${recUrl}" download="reaction.webm">🎥 حمّل فيديو الجولة</a>` : ""}
+       <button class="big" data-act="${netRole === "host" ? "nextround" : "start"}">جولة جديدة 🔁</button>
+       <button class="ghost" data-act="setup">تغيير الإعدادات</button>`}
 </div></div>`;
+};
 
 function show(v) {
   clearInterval(timerId); timerId = null;
@@ -327,8 +539,8 @@ function show(v) {
   app.innerHTML = views[v]();
   if (!sameView) window.scrollTo(0, 0);
   if (v === "discuss") {
-    if (S.timer) startTimer();
-    renderRec();
+    if (isGuest() ? G.duration : S.timer) startTimer();
+    if (!isGuest()) renderRec();
   }
 }
 
@@ -376,10 +588,11 @@ function renderRec() {
 }
 
 function startTimer() {
-  G.left = S.timer;
+  const dur = isGuest() ? G.duration : S.timer;
+  G.left = dur;
   const el = document.getElementById("clock");
   const ring = document.getElementById("ring");
-  const paint = () => ring && ring.style.setProperty("--p", Math.max(0, G.left / S.timer));
+  const paint = () => ring && ring.style.setProperty("--p", dur ? Math.max(0, G.left / dur) : 1);
   if (!el) return;
   paint();
   timerId = setInterval(() => {
@@ -398,14 +611,8 @@ function startTimer() {
 
 function newRound() {
   recGen++; if (rec) rec.mr.stop(); recUrl = null;
-  const cats = S.cats.length ? S.cats : ALL;
-  const cat = pick(cats);
-  const n = S.chaos
-    ? 1 + rnd(Math.min(3, S.players - 1))
-    : Math.min(S.impostors, S.players - 1);
-  const idx = Array.from({ length: S.players }, (_, i) => i);
-  for (let i = idx.length - 1; i > 0; i--) { const j = rnd(i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
-  G = { cat, word: pick(CATS[cat]), imp: idx.slice(0, n), i: 0, start: rnd(S.players), left: 0 };
+  const r = buildRound(S.players);
+  G = { ...r, i: 0, start: rnd(S.players), left: 0, duration: S.timer };
   show("pass");
 }
 
@@ -413,31 +620,51 @@ app.addEventListener("click", e => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
   const a = el.dataset.act, v = el.dataset.val;
+  const pc = netRole === "host" ? players.length + 1 : S.players;
 
   if (a === "p-") S.players = Math.max(3, S.players - 1);
   else if (a === "p+") S.players = Math.min(20, S.players + 1);
   else if (a === "i-") S.impostors = Math.max(1, S.impostors - 1);
-  else if (a === "i+") S.impostors = Math.min(3, S.players - 1, S.impostors + 1);
+  else if (a === "i+") S.impostors = Math.min(3, pc - 1, S.impostors + 1);
   else if (a === "chaos") S.chaos = !S.chaos;
   else if (a === "t") S.timer = +v;
   else if (a === "cat") {
     S.cats = S.cats.includes(v) ? S.cats.filter(c => c !== v) : [...S.cats, v];
   }
-  else if (a === "start") { newRound(); return; }
+  else if (a === "mode") {
+    if (v === S.mode) return;
+    S.mode = v;
+    if (v === "online") createRoom(); else closeNet();
+    localStorage.setItem(KEY, JSON.stringify(S));
+    show("setup"); return;
+  }
+  else if (a === "share") { shareLink(); return; }
+  else if (a === "join") {
+    const code = (document.getElementById("joinCode").value || "").trim().toUpperCase().replace(/^M7L-/, "");
+    const nm = (document.getElementById("joinName").value || "").trim() || "لاعب";
+    if (!code) { alert("دخل رمز الغرفة"); return; }
+    joinCode = code; joinRoom(code, nm); return;
+  }
+  else if (a === "start") { netRole === "host" ? hostNewRound() : newRound(); return; }
   else if (a === "card") { show("card"); return; }
+  else if (a === "ready") { send({ t: "ready" }); show("wait"); return; }
   else if (a === "hide") {
-    if (G.i + 1 < S.players) { G.i++; show("pass"); }
+    if (netRole === "host") show("wait");
+    else if (G.i + 1 < S.players) { G.i++; show("pass"); }
     else show("discuss");
     return;
   }
   else if (a === "randstart") {
-    G.start = rnd(S.players);
-    app.querySelector(".row .pname").textContent = name(G.start);
+    G.start = rnd(netRole === "host" ? players.length + 1 : S.players);
+    const nm2 = name(G.start);
+    app.querySelector(".row .pname").textContent = nm2;
+    if (netRole === "host") broadcast({ t: "starter", startName: nm2 });
     return;
   }
+  else if (a === "nextround") { hostNextRound(); return; }
   else if (a === "recstart") { startRec(); return; }
   else if (a === "recstop") { if (rec) rec.mr.stop(); return; }
-  else if (a === "reveal") { show("reveal"); return; }
+  else if (a === "reveal") { netRole === "host" ? hostReveal() : show("reveal"); return; }
   else if (a === "setup") { show("setup"); return; }
 
   if (S.impostors > S.players - 1) S.impostors = Math.max(1, S.players - 1);
@@ -446,13 +673,18 @@ app.addEventListener("click", e => {
 });
 
 app.addEventListener("input", e => {
+  if (e.target.id === "hostName") {
+    S.hostName = e.target.value;
+    localStorage.setItem(KEY, JSON.stringify(S));
+    return;
+  }
   const el = e.target.closest(".nm");
-  if (!el) return;
+  if (!el || !el.dataset.i) return;
   S.names[+el.dataset.i] = el.value;
   localStorage.setItem(KEY, JSON.stringify(S));
 });
 
-show("setup");
+show(joinCode ? "join" : "setup");
 </script>
 </body>
 </html>
