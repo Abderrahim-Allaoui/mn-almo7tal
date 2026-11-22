@@ -358,6 +358,7 @@ views.setup = () => {
     <button data-act="mode" data-val="local" class="${online ? "" : "on"}">تيليفون واحد</button>
     <button data-act="mode" data-val="online" class="${online ? "on" : ""}">أونلاين 🌐</button>
   </div>
+  ${online ? "" : `<button class="ghost" style="width:auto;align-self:flex-start" data-act="entercode">عندي رمز غرفة 🔑</button>`}
 
   ${online ? `
   <section class="card" style="padding:14px">
@@ -447,12 +448,13 @@ views.join = () => `
     <div class="lbl">رمز الغرفة</div>
     <input class="nm" id="joinCode" maxlength="8" value="${joinCode}" style="margin:8px 0;letter-spacing:2px;text-align:center">
     <div class="lbl">اسمك</div>
-    <input class="nm" id="joinName" maxlength="14" placeholder="اسمك" style="margin-top:8px">
+    <input class="nm" id="joinName" maxlength="14" placeholder="اسمك" value="${esc(guestName)}" style="margin-top:8px">
   </div>
 </div>
 
 <div class="cta"><div class="cta-in">
   <button class="big" data-act="join">انضم 🌐</button>
+  <button class="ghost" data-act="backsetup">رجوع</button>
 </div></div>`;
 
 views.wait = () => `
@@ -678,6 +680,8 @@ app.addEventListener("click", e => {
     localStorage.setItem(KEY, JSON.stringify(S));
     show("setup"); return;
   }
+  else if (a === "entercode") { show("join"); return; }
+  else if (a === "backsetup") { show("setup"); return; }
   else if (a === "share") { shareLink(); return; }
   else if (a === "retry") {
     if (netRole === "host") { const c = roomCode || genCode(); closeNet(); connectMqtt(c, "host", () => show("setup")); }
