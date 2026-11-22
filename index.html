@@ -172,6 +172,8 @@ const BROKERS = [
 let netRole = null;    // "host" | "guest" | null
 let roomCode = "", players = [], readyCount = 0, readyIds = new Set();
 let joinCode = (new URLSearchParams(location.search).get("room") || "").toUpperCase();
+let guestName = "";
+try { guestName = localStorage.getItem("mn_guest_name") || ""; } catch (e) {}
 const isGuest = () => netRole === "guest";
 const topic = () => "mn-almo7tal/v1/" + roomCode;
 const send = d => { if (mqttClient && roomCode) { try { mqttClient.publish(topic(), JSON.stringify({ ...d, from: clientId })); } catch (e) {} } };
@@ -182,6 +184,7 @@ const rnd = n => Math.floor(Math.random() * n);
 const pick = a => a[rnd(a.length)];
 const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const name = i => ((S.names[i] || "").trim() || "لاعب " + (i + 1));
+const esc = v => (v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 function genCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
 
@@ -257,7 +260,9 @@ function createRoom() {
 
 function joinRoom(code, name) {
   if (netRole) return;
-  connectMqtt(code, "guest", () => { send({ t: "hello", name }); show("wait"); });
+  netRole = "guest"; roomCode = code; guestName = name;
+  try { localStorage.setItem("mn_guest_name", guestName); } catch (e) {}
+  connectMqtt(code, "guest", () => { send({ t: "hello", name: guestName }); show("wait"); });
 }
 
 function onHostData(d) {
@@ -265,6 +270,9 @@ function onHostData(d) {
     if (players.length >= 19 || players.some(p => p.id === d.from)) return;
     players.push({ id: d.from, name: d.name || "لاعب" });
     if (view === "setup") show("setup");
+  } else if (d.t === "rename") {
+    const p = players.find(x => x.id === d.from);
+    if (p) { p.name = d.name || p.name; if (view === "setup") show("setup"); }
   } else if (d.t === "ready" && view === "wait") {
     readyIds.add(d.from); readyCount = readyIds.size;
     if (readyCount >= players.length) beginDiscussHost(); else show("wait");
@@ -452,6 +460,11 @@ views.wait = () => `
   <div class="pass-ico">⏳</div>
   <h2>${isGuest() ? "وصلتي للغرفة" : "ستنى اللاعبين"}</h2>
   <p class="hint">${netStatus !== "online" ? (netStatus === "error" ? "الاتصال انقطع — جرّب مرة أخرى" : "جاري الاتصال…") : isGuest() ? "المضيف كيوزّع البطاقات…" : `${readyCount}/${players.length} خفّيو البطاقة`}</p>
+  ${isGuest() ? `<div class="card" style="padding:14px;width:100%;text-align:right">
+    <div class="lbl">اسمك فاللعبة</div>
+    <input class="nm" id="myName" maxlength="14" value="${esc(guestName)}" style="margin-top:8px">
+    <button class="ghost" style="margin-top:8px" data-act="rename">تحديث الاسم</button>
+  </div>` : ""}
 </div>
 
 <div class="cta"><div class="cta-in">
@@ -668,7 +681,18 @@ app.addEventListener("click", e => {
   else if (a === "share") { shareLink(); return; }
   else if (a === "retry") {
     if (netRole === "host") { const c = roomCode || genCode(); closeNet(); connectMqtt(c, "host", () => show("setup")); }
-    else { closeNet(); show("join"); }
+    else { closeNet(); show("wait"); joinRoom(joinCode, guestName || "ضيف"); }
+    return;
+  }
+  else if (a === "rename") {
+    const el = document.getElementById("myName");
+    const nv = (el && el.value || "").trim();
+    if (nv) {
+      guestName = nv;
+      try { localStorage.setItem("mn_guest_name", nv); } catch (e) {}
+      send({ t: "rename", name: nv });
+      if (el) el.blur();
+    }
     return;
   }
   else if (a === "leave") { closeNet(); show("join"); return; }
@@ -717,7 +741,11 @@ app.addEventListener("input", e => {
   localStorage.setItem(KEY, JSON.stringify(S));
 });
 
-show(joinCode ? "join" : "setup");
+if (joinCode) {
+  guestName = guestName || ("ضيف" + (10 + rnd(90)));
+  joinRoom(joinCode, guestName);
+  show("wait");
+} else show("setup");
 </script>
 </body>
 </html>
