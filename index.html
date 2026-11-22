@@ -163,7 +163,12 @@ let timerId = null;
 let rec = null;        // active MediaRecorder session
 let recUrl = null;     // last recording blob url
 
-let mqttClient = null, clientId = "";
+let mqttClient = null, clientId = "", netStatus = "idle";
+const BROKERS = [
+  "wss://broker.emqx.io:8084/mqtt",
+  "wss://broker.hivemq.com:8884/mqtt",
+  "wss://broker.emqx.io:443/mqtt"
+];
 let netRole = null;    // "host" | "guest" | null
 let roomCode = "", players = [], readyCount = 0, readyIds = new Set();
 let joinCode = (new URLSearchParams(location.search).get("room") || "").toUpperCase();
@@ -183,29 +188,50 @@ function genCode() { return Math.random().toString(36).slice(2, 7).toUpperCase()
 function loadMqtt(cb) {
   if (window.mqtt) return cb();
   const s = document.createElement("script");
-  s.src = "https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.16.1/mqtt.min.js";
+  s.src = "mqtt.min.js";
   s.onload = cb;
   s.onerror = () => alert("ما قدرناش نحمّلو مكتبة الاتصال. تأكد من الإنترنت.");
   document.head.appendChild(s);
 }
 
-function connectMqtt(code, role, after) {
+function connectMqtt(code, role, after, attempt = 0) {
   loadMqtt(() => {
-    roomCode = code; netRole = role;
+    if (attempt >= BROKERS.length) {
+      netStatus = "error";
+      alert("ما قدرناش نتصلو بالأونلاين. تأكد من الإنترنت وجرّب مرة أخرى.");
+      show(view);
+      return;
+    }
+    roomCode = code; netRole = role; netStatus = "connecting";
+    if (view === "setup" || view === "join") show(view);
     clientId = "m7l" + Math.random().toString(36).slice(2, 12);
-    const m = window.mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
-      clientId, clean: true, keepalive: 30, connectTimeout: 10000, reconnectPeriod: 2000
+    const m = window.mqtt.connect(BROKERS[attempt], {
+      clientId, clean: true, keepalive: 30, connectTimeout: 3500, reconnectPeriod: 2000
     });
     mqttClient = m;
-    m.on("connect", () => m.subscribe(topic(), { qos: 1 }, () => after()));
+    let settled = false;
+    const fail = () => {
+      if (settled || m !== mqttClient) return;
+      settled = true; clearTimeout(timer);
+      try { m.end(true); } catch (e) {}
+      connectMqtt(code, role, after, attempt + 1);
+    };
+    const timer = setTimeout(fail, 3500);
+    m.on("connect", () => m.subscribe(topic(), { qos: 1 }, err => {
+      if (settled || m !== mqttClient) return;
+      if (err) return fail();
+      settled = true; clearTimeout(timer); netStatus = "online"; after();
+    }));
     m.on("message", (t, buf) => {
-      if (t !== topic()) return;
+      if (m !== mqttClient || t !== topic()) return;
       let d;
       try { d = JSON.parse(buf.toString()); } catch (e) { return; }
       if (!d || d.from === clientId || (d.to && d.to !== clientId)) return;
       if (netRole === "host") onHostData(d); else onGuestData(d);
     });
-    m.on("error", e => alert("مشكل الاتصال: " + (e.message || "الأونلاين")));
+    m.on("error", fail);
+    m.on("offline", () => { if (!settled) fail(); else { netStatus = "error"; show(view); } });
+    m.on("reconnect", () => { if (settled) { netStatus = "connecting"; show(view); } });
   });
 }
 
@@ -214,10 +240,8 @@ function closeNet() {
   if (netRole === "guest") send({ t: "bye" });
   if (mqttClient) { try { mqttClient.end(true); } catch (e) {} }
   mqttClient = null; clientId = ""; netRole = null;
-  players = []; roomCode = ""; readyCount = 0; readyIds = new Set();
+  players = []; roomCode = ""; readyCount = 0; readyIds = new Set(); netStatus = "idle";
 }
-
-window.addEventListener("pagehide", () => { if (netRole === "guest") send({ t: "bye" }); });
 
 function shareLink() {
   const url = location.origin + location.pathname + "?room=" + roomCode;
@@ -330,9 +354,11 @@ views.setup = () => {
   ${online ? `
   <section class="card" style="padding:14px">
     <div class="lbl">رمز الغرفة</div>
-    <div class="room-code">${roomCode || "..."}</div>
-    <div class="hint" style="text-align:center">شارك الرابط، ولا عطيهم الرمز</div>
-    <button class="ghost" style="margin-top:12px" data-act="share">نسخ رابط الغرفة</button>
+    <div class="room-code">${roomCode || (netStatus === "error" ? "!" : "...")}</div>
+    <div class="hint" style="text-align:center">${netStatus === "online" ? "شارك الرابط، ولا عطيهم الرمز" : netStatus === "error" ? "فشل الاتصال — جرّب مرة أخرى" : "جاري الاتصال…"}</div>
+    ${netStatus === "online"
+      ? `<button class="ghost" style="margin-top:12px" data-act="share">نسخ رابط الغرفة</button>`
+      : `<button class="ghost" style="margin-top:12px" data-act="retry">إعادة المحاولة</button>`}
     <div class="lbl" style="margin-top:16px">اسمك</div>
     <input class="nm" id="hostName" maxlength="14" placeholder="المضيف" value="${esc(S.hostName)}" style="margin-top:8px">
   </section>
@@ -425,11 +451,12 @@ views.wait = () => `
 <div class="wrap center">
   <div class="pass-ico">⏳</div>
   <h2>${isGuest() ? "وصلتي للغرفة" : "ستنى اللاعبين"}</h2>
-  <p class="hint">${isGuest() ? "المضيف كيوزّع البطاقات…" : `${readyCount}/${players.length} خفّيو البطاقة`}</p>
+  <p class="hint">${netStatus !== "online" ? (netStatus === "error" ? "الاتصال انقطع — جرّب مرة أخرى" : "جاري الاتصال…") : isGuest() ? "المضيف كيوزّع البطاقات…" : `${readyCount}/${players.length} خفّيو البطاقة`}</p>
 </div>
 
 <div class="cta"><div class="cta-in">
-  <button class="big" disabled>ستنى…</button>
+  ${netStatus === "error" && isGuest() ? `<button class="big" data-act="retry">إعادة الاتصال</button>` : `<button class="big" disabled>ستنى…</button>`}
+  ${isGuest() ? `<button class="ghost" data-act="leave">خروج من الغرفة</button>` : ""}
 </div></div>`;
 
 views.pass = () => `
@@ -639,6 +666,12 @@ app.addEventListener("click", e => {
     show("setup"); return;
   }
   else if (a === "share") { shareLink(); return; }
+  else if (a === "retry") {
+    if (netRole === "host") { const c = roomCode || genCode(); closeNet(); connectMqtt(c, "host", () => show("setup")); }
+    else { closeNet(); show("join"); }
+    return;
+  }
+  else if (a === "leave") { closeNet(); show("join"); return; }
   else if (a === "join") {
     const code = (document.getElementById("joinCode").value || "").trim().toUpperCase().replace(/^M7L-/, "");
     const nm = (document.getElementById("joinName").value || "").trim() || "لاعب";
